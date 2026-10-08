@@ -1,0 +1,54 @@
+name: Validate and deploy BrainPower
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: brainpower-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    name: Validate static website
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website
+          path: dist
+          retention-days: 7
+  deploy:
+    name: Deploy to Cloudflare Pages
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: production
+      url: https://brainpower-awesome-flavors.pages.dev
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: website
+          path: dist
+      - name: Publish website
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=brainpower-awesome-flavors --branch=main
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

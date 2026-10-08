@@ -1,0 +1,11 @@
+{
+  "name": "brainpower-awesome-flavors",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BrainPower static bubble gum brand website",
+  "scripts": {
+    "check": "node --check dist/app.js && node scripts/check.mjs",
+    "build": "npm run check",
+    "preview": "python3 -m http.server 4173 --directory dist"
+  }
+}
