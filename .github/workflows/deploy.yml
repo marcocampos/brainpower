@@ -5,50 +5,61 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-permissions:
-  contents: read
+permissions: {}
 concurrency:
   group: brainpower-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   validate:
     name: Validate static website
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: website
           path: dist
-          retention-days: 7
+          retention-days: 1
+          if-no-files-found: error
   deploy:
     name: Deploy to Cloudflare Pages
     needs: validate
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
-      deployments: write
     environment:
       name: production
       url: https://brainpower-awesome-flavors.pages.dev
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24'
-      - uses: actions/download-artifact@v4
+      - name: Install locked deployment tools without lifecycle scripts
+        run: npm ci --ignore-scripts --no-fund
+      - name: Audit deployment dependencies
+        run: npm audit --audit-level=high
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: website
           path: dist
-      - name: Publish website
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=brainpower-awesome-flavors --branch=main
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish website with private command output
+        run: node scripts/deploy.mjs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+          CI: 'true'
